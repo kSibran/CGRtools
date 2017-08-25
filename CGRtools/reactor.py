@@ -22,28 +22,30 @@ from functools import reduce
 from itertools import product, combinations
 from networkx import Graph, compose, has_path
 from networkx.algorithms import isomorphism as gis
-from .containers import CGRTemplate
+from .containers import CGRTemplate, MatchContainer
 from .core import CGRcore
 
 
-def patcher(matrix):
+def patcher(structure, patch):
     """ remove edges bw common nodes. add edges from template and replace nodes data
-    :param matrix: dict
+    :param structure: MoleculeContainer
+    :param patch: MoleculeContainer with replacement data
     """
-    s = matrix['substrats'].copy()
-    p = matrix['products'].copy()
+    s = structure.copy()
+    p = patch.copy()
 
     common = set(p).intersection(s)
     for i in common:
-        for j in {'s_charge', 's_hyb', 's_neighbors', 'p_charge', 'p_hyb', 'p_neighbors'}.intersection(p.node[i]):
-            if isinstance(p.node[i][j], dict):
-                p.node[i][j] = p.node[i][j][s.node[i][j]]
+        pni = p.nodes[i]
+        for j in {'s_charge', 's_hyb', 's_neighbors', 'p_charge', 'p_hyb', 'p_neighbors'}.intersection(pni):
+            if isinstance(pni[j], dict):
+                pni[j] = pni[j][s.nodes[i][j]]
 
     for m, n, a in p.edges(data=True):
         if m in common and n in common:
             for j in {'s_bond', 'p_bond'}.intersection(a):
                 if isinstance(a[j], dict):
-                    a[j] = a[j][s.edge[m][n][j]]
+                    a[j] = a[j][s[m][n][j]]
 
     s.remove_edges_from(combinations(common, 2))
     composed = compose(s, p)
@@ -58,6 +60,8 @@ def patcher(matrix):
 
 
 class CGRreactor(object):
+    """ CGR isomorphism based operations
+    """
     def __init__(self, extralabels=False, isotope=False, element=True, stereo=False):
         self.__rc_template = self.__reaction_center()
 
@@ -106,13 +110,22 @@ class CGRreactor(object):
         return gis.GraphMatcher(g, h, node_match=self.__node_match, edge_match=self.__edge_match)
 
     def get_template_searcher(self, templates):
-        def searcher(g):
+        def searcher(g, skip_intersection=True):
+            if skip_intersection:
+                found = set()
+
             for i in templates:
                 gm = self.get_cgr_matcher(g, i.substrats)
                 for j in gm.subgraph_isomorphisms_iter():
-                    res = dict(substrats=g, meta=i.meta,
-                               products=self.__remap_group(i.products, g, {y: x for x, y in j.items()})[0])
-                    yield res
+                    matched_atoms = set(j.keys())
+                    if skip_intersection:
+                        if found.intersection(matched_atoms):
+                            continue
+                        else:
+                            found.update(matched_atoms)
+
+                    yield MatchContainer(mapping=list(matched_atoms), meta=i.meta,
+                                         patch=self.__remap_group(i.products, g, {y: x for x, y in j.items()})[0])
 
         return searcher
 
@@ -206,17 +219,17 @@ class CGRreactor(object):
             common = set(products).intersection(substrats)
             for n in common:
                 for j in {'s_charge', 's_hyb', 's_neighbors',
-                          'p_charge', 'p_hyb', 'p_neighbors'}.intersection(products.node[n]):
-                    if isinstance(products.node[n][j], list):
-                        products.node[n][j] = {x: y for x, y in zip(substrats.node[n][j], products.node[n][j])}
+                          'p_charge', 'p_hyb', 'p_neighbors'}.intersection(products.nodes[n]):
+                    if isinstance(products.nodes[n][j], list):
+                        products.nodes[n][j] = {x: y for x, y in zip(substrats.nodes[n][j], products.nodes[n][j])}
                 for j in ('s_x', 's_y', 's_z', 'p_x', 'p_y', 'p_z'):
-                    products.node[n].pop(j)
+                    products.nodes[n].pop(j)
 
             for m, n, a in products.edges(data=True):
                 if m in common and n in common:
                     for j in {'s_bond', 'p_bond'}.intersection(a):
                         if isinstance(a[j], list):
-                            products.edge[m][n][j] = {x: y for x, y in zip(substrats.edge[m][n][j], a[j])}
+                            a[j] = {x: y for x, y in zip(substrats[m][n][j], a[j])}
 
             substrats.remap({x: x + 1000 for x in substrats})
             products.remap({x: x + 1000 for x in products})

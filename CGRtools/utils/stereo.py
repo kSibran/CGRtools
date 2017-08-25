@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  version.py
-#
-#  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -22,5 +20,13 @@
 #
 
 
-def version():
-    return '2.7.7'
+def fix_stereo(g):
+    g.reset_query_marks()
+    weights = g.get_morgan()
+
+    for atom, attr in g.nodes(data=True):
+        if attr['element'] in ('C', 'Si'):
+            if attr['s_neighbors'] in (3, 4) and attr['s_hyb'] == 1:
+                pass
+
+    return g

@@ -26,6 +26,7 @@ from .strings import get_morgan, get_cgr_string, hash_cgr_string
 
 
 CGRTemplate = namedtuple('CGRTemplate', ['substrats', 'products', 'meta'])
+MatchContainer = namedtuple('MatchContainer', ['mapping', 'meta', 'patch'])
 
 
 class MergedReaction(namedtuple('MergedReaction', ['substrats', 'products'])):
@@ -67,7 +68,7 @@ class MoleculeContainer(Graph):
         """ convert json serializable CGR into MoleculeContainer object instance 
         """
         g = node_link_graph(data, attrs=cls.__attrs)
-        g.__class__ = MoleculeContainer
+        g.__class__ = cls
         g.meta.update(data['meta'])
         for s in data['stereo']:
             g.add_stereo(*s)
@@ -84,6 +85,7 @@ class MoleculeContainer(Graph):
 
     def copy(self):
         copy = super(MoleculeContainer, self).copy()
+        copy.__class__ = self.__class__
         copy.meta.update(self.meta)
         for (a1, a2), x in self._stereo_dict.items():
             copy.add_stereo(a1, a2, x.get('s'), x.get('p'))
@@ -91,6 +93,7 @@ class MoleculeContainer(Graph):
 
     def subgraph(self, nbunch, copy=True, meta=False):
         sub = super(MoleculeContainer, self).subgraph(nbunch)
+        sub.__class__ = self.__class__
         if copy:
             sub = sub.copy()
         if meta:
@@ -194,8 +197,7 @@ class MoleculeContainer(Graph):
 
     def fix_sp_marks(self, copy=False, nodes_bunch=None, edges_bunch=None):
         g = self.copy() if copy else self
-        for n in g.nodes() if nodes_bunch is None else nodes_bunch:
-            a = g.node[n]
+        for n, a in g.nodes(data=True) if nodes_bunch is None else ((x, g.nodes[x]) for x in nodes_bunch):
             a.update(self.__attr_renew(a, self.__node_marks))
         for *_, a in g.edges(nbunch=edges_bunch, data=True):
             a.update(self.__attr_renew(a, (('s_bond', 'p_bond', 'sp_bond'),)))
@@ -209,12 +211,12 @@ class MoleculeContainer(Graph):
         """
         g = self.copy() if copy else self
         for i in g.nodes():
-            label = {'s_hyb': 1, 'p_hyb': 1, 'sp_hyb': 1, 's_neighbors': 0, 'p_neighbors': 0, 'sp_neighbors': 0}
+            label = dict(s_hyb=1, p_hyb=1, sp_hyb=1, s_neighbors=0, p_neighbors=0, sp_neighbors=0)
             #  hyb 1- sp3; 2- sp2; 3- sp1; 4- aromatic
             for b, h, n in (('s_bond', 's_hyb', 's_neighbors'), ('p_bond', 'p_hyb', 'p_neighbors')):
                 for node, bond in g[i].items():
                     b_type = bond.get(b)
-                    if b_type and g.node[node]['element'] != 'H':
+                    if b_type and g.nodes[node]['element'] != 'H':
                         label[n] += 1
                     if b_type in (1, None) or label[h] in (3, 4):
                         continue
@@ -228,7 +230,7 @@ class MoleculeContainer(Graph):
             for n, m, h in (('s_hyb', 'p_hyb', 'sp_hyb'), ('s_neighbors', 'p_neighbors', 'sp_neighbors')):
                 label[h] = (label[n], label[m]) if label[n] != label[m] else label[n]
 
-            g.node[i].update(label)
+            g.nodes[i].update(label)
         return g if copy else None
 
     @staticmethod

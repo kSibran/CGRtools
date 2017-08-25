@@ -18,7 +18,7 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from itertools import count, product, chain
+from itertools import count, chain
 from collections import defaultdict
 from periodictable import elements
 from ..containers import ReactionContainer, MoleculeContainer
@@ -279,15 +279,15 @@ class CGRread:
                            s_x=l['x'], s_y=l['y'], s_z=l['z'], p_x=l['x'], p_y=l['y'], p_z=l['z'],
                            s_charge=l['charge'], p_charge=l['charge'], sp_charge=l['charge'])
 
-            if 'element' not in g.node[atom_map] and l['element'] not in ('A', '*'):
-                g.node[atom_map]['element'] = l['element']
-            if l['isotope'] and 'isotope' not in g.node[atom_map]:
+            if 'element' not in g.nodes[atom_map] and l['element'] not in ('A', '*'):
+                g.nodes[atom_map]['element'] = l['element']
+            if l['isotope'] and 'isotope' not in g.nodes[atom_map]:
                 a = elements.symbol(l['element'])
-                g.node[atom_map]['isotope'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotope']
+                g.nodes[atom_map]['isotope'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotope']
 
-            if l['z'] != 0:
+            if mdl_s_stereo and l['z'] != 0:
                 mdl_s_stereo = False
-            if abs(p_z) > .0001:
+            if mdl_p_stereo and abs(p_z) > .0001:
                 mdl_p_stereo = False
 
         for k, l, m, s in molecule['bonds']:
@@ -309,7 +309,7 @@ class CGRread:
         if colors:
             for k, v in colors.items():
                 for a, c in cls.__parse_colors(k, v).items():
-                    g.node[mapping[a]].update(c)
+                    g.nodes[mapping[a]].update(c)
         return g
 
     __marks = {mark: ('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in ('neighbors', 'hyb', 'bond')}
@@ -479,7 +479,7 @@ class CGRwrite:
                               for i, j in enumerate(atoms, start=1)),
                              ('</atomArray><bondArray>',),
                              ('<bond id="b{0}" atomRefs2="a{1} a{2}" order="{3}"{4}'
-                              .format(i, j, l, '1" queryType="Any' if k == 8 else k,
+                              .format(i, j, l, '1" queryType="Any' if k == 8 else 'A' if k == 4 else k,
                                       '><bondStereo>%s</bondStereo></bond>' % s if s else '/>')
                               for i, (j, l, k, s) in enumerate(bonds, start=1)),
                              ('</bondArray>',),
